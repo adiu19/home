@@ -61,6 +61,7 @@ author:
   name   : "Aditya Upadhyaya"
   avatar : "/assets/images/bio-photo.jpg"
   bio    : "My awesome biography constrained to a sentence or two goes here."
+  location: "Mountain View, CA"
   links:
     - label: "LinkedIn"
       icon: "fab fa-linkedin-in"
