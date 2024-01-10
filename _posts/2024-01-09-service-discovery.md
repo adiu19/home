@@ -1,29 +1,28 @@
 ---
-title: "Service Discovery"
+title: "Client-Side Service Discovery"
 date: 2024-01-09T02:37:04-04:00
 categories:
   - blog
 tags:
-  - Jekyll
-  - update
----
+  - Distributed Systems
+  - Microservice Patterns
+--- 
 
-You'll find this post in your `_posts` directory. Go ahead and edit it and re-build the site to see your changes. You can rebuild the site in many different ways, but the most common way is to run `jekyll serve`, which launches a web server and auto-regenerates your site when a file is updated.
+## Why do we need Service Discovery?
+Applications we build today have one commonality - they all, more or less, make network calls to external processes. To successfully make such a call, the application will need to know the IP address and port of the process. We could, in theory, keep those fields static, but in modern applications, the server instance on which the process is hosted changes frequently owing to failures and auto-scaling.
 
-To add new posts, simply add a file in the `_posts` directory that follows the convention `YYYY-MM-DD-name-of-post.ext` and includes the necessary front matter. Take a look at the source for this post to get an idea about how it works.
+There are two ways in which our application can _discover_ said external process - server-side discovery or client-side discovery. Server-side discovery is usually achieved via load balancers, but today, we'll focus on client-side service discovery.
 
-Jekyll also offers powerful support for code snippets:
+## Service Registry
 
-```ruby
-def print_hi(name)
-  puts "Hi, #{name}"
-end
-print_hi('Tom')
-#=> prints 'Hi, Tom' to STDOUT.
+```rust
+fn register_instance(config: ServiceInstanceConfig) -> Boolean {
+}
+
+fn heartbeat(config: ServiceInstanceConfig) -> Boolean {
+}
+
+fn fetch_instances(svc: String) -> Vec<ServiceInstance>{
+
+}
 ```
-
-Check out the [Jekyll docs][jekyll-docs] for more info on how to get the most out of Jekyll. File all bugs/feature requests at [Jekyll’s GitHub repo][jekyll-gh]. If you have questions, you can ask them on [Jekyll Talk][jekyll-talk].
-
-[jekyll-docs]: https://jekyllrb.com/docs/home
-[jekyll-gh]:   https://github.com/jekyll/jekyll
-[jekyll-talk]: https://talk.jekyllrb.com/
