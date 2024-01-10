@@ -15,14 +15,16 @@ There are two ways in which our application can _discover_ said external process
 
 ## Service Registry
 
+An important component of every service discovery process (be it server-side or client-side) is service registry. It can be thought of as a database (possibly AZ-aware) that holds the location of all instances of a service. When a new instance of a service comes up, it needs to log its presence in the registry in order to be reachable. Once the instance is registered, it needs to send periodic hearbeats to ensure its liveness.
+
 ```rust
-fn register_instance(config: ServiceInstanceConfig) -> Boolean {
+fn register_instance(config: SvcInstanceCfg) -> Boolean {
 }
 
-fn heartbeat(config: ServiceInstanceConfig) -> Boolean {
+fn heartbeat(config: SvcInstanceCfg) -> Boolean {
 }
 
-fn fetch_instances(svc: String) -> Vec<ServiceInstance>{
+fn fetch_instances(svc: String) -> Vec<SvcInstance>{
 
 }
 ```
