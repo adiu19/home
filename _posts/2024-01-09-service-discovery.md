@@ -1,6 +1,6 @@
 ---
 title: "Service Discovery"
-date: 2024-01-10T02:37:04-04:00
+date: 2024-01-09T02:37:04-04:00
 categories:
   - blog
 tags:
