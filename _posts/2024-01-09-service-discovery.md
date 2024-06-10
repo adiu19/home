@@ -9,13 +9,13 @@ tags:
 --- 
 
 ## Why do we need Service Discovery?
-Applications we build today have one commonality - they all, more or less, make network calls to external processes. To successfully make such a call,we need to know the IP address and port of the process. We could, in theory, keep those fields static,but the server instance on which the process is hosted changes frequently owing to failures and auto-scaling.
+Applications we build today have one commonality - they all, more or less, make network calls to external processes and to make such a call, we require the _address_ of the process. We could, in theory, keep those fields somewhere in a static configuration assuming we know them, but the server instance on which the process is hosted changes frequently owing to failures and auto-scaling.
 
-There are two ways in which we can _discover_ said external process - server-side discovery or client-side discovery. Server-side discovery is usually achieved via load balancers, but today, we'll focus on client-side service discovery.
+There are two ways in which we can _discover_ said external process - server-side discovery and client-side discovery. Server-side discovery is usually done via load balancers, but today, our focus will be on client-side service discovery.
 
 ## Service Registry
 
-An important component of every service discovery process (be it server-side or client-side) is service registry. It can be thought of as a database (possibly AZ-aware) that holds the location of all instances of a service. When a new instance of a service comes up, it needs to log its presence in the registry in order to be reachable. Once the instance is registered, it needs to send periodic hearbeats to ensure its liveness.
+An important component of every service discovery process (be it server-side or client-side) is service registry. It can be thought of as a database (possibly AZ-aware) that holds the location of all instances of a service. When a new instance comes up, it needs to log its presence in the registry in order to be reachable. That's not the end of it however; it needs to send periodic hearbeats to broadcast its liveness.
 
 ```golang
 func RegisterInstance(config SvcInstanceCfg) Boolean {
