@@ -9,9 +9,9 @@ tags:
 --- 
 
 ## Why do we need Service Discovery?
-Applications we build today have one commonality - they all, more or less, make network calls to external processes. To successfully make such a call, the application will need to know the IP address and port of the process. We could, in theory, keep those fields static, but in modern applications, the server instance on which the process is hosted changes frequently owing to failures and auto-scaling.
+Applications we build today have one commonality - they all, more or less, make network calls to external processes. To successfully make such a call,we need to know the IP address and port of the process. We could, in theory, keep those fields static,but the server instance on which the process is hosted changes frequently owing to failures and auto-scaling.
 
-There are two ways in which our application can _discover_ said external process - server-side discovery or client-side discovery. Server-side discovery is usually achieved via load balancers, but today, we'll focus on client-side service discovery.
+There are two ways in which we can _discover_ said external process - server-side discovery or client-side discovery. Server-side discovery is usually achieved via load balancers, but today, we'll focus on client-side service discovery.
 
 ## Service Registry
 
