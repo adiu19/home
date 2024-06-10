@@ -2,7 +2,7 @@
 title: "Client-Side Service Discovery"
 date: 2024-01-09T02:37:04-04:00
 categories:
-  - blog
+  - Distributed Systems
 tags:
   - Distributed Systems
   - Microservice Patterns
@@ -28,3 +28,8 @@ fn fetch_instances(svc: String) -> Vec<SvcInstance>{
 
 }
 ```
+
+## Flow
+
+1. Client-Side abstraction
+2. Sidecar pattern
