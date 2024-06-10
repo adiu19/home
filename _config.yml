@@ -60,7 +60,7 @@ plugins:
 author:
   name   : "Aditya Upadhyaya"
   avatar : "/assets/images/bio-photo.jpg"
-  bio    : "My awesome biography constrained to a sentence or two goes here."
+  bio    : "Thoughts gathered, chaos tamed."
   location: "Mountain View, CA"
   links:
     - label: "LinkedIn"
