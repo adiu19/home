@@ -66,12 +66,6 @@ It worked. It matched Hugging Face.
 It passed all round-trip tests.  
 It handled odd Unicode, edge cases, and controlled merges correctly.
 
-Performance was great (Go-great).
-
-| Benchmark                      | Iterations |       ns/op |  MB/s |          B/op | allocs/op |
-| ------------------------------ | ---------: | ----------: | ----: | ------------: | --------: |
-| NaiveEncodeStreaming_4KBChunks |         10 | 462,254,429 | 11.34 | 1,830,937,034 | 2,343,413 |
-
 
 This gave me the confidence to start the real challenge.
 
@@ -125,3 +119,20 @@ The naive streaming encoder is simple:
 No cross-boundary merging but extremely practical.
 
 And most importantly, much easier to optimize.
+
+
+### Profiling the Naive Streaming Encoder: Where the Time Actually Goes
+
+| Benchmark                      | Iterations |       ns/op |  MB/s |          B/op | allocs/op |
+| ------------------------------ | ---------: | ----------: | ----: | ------------: | --------: |
+| NaiveEncodeStreaming_4KBChunks |         10 | 462,254,429 | 11.34 | 1,830,937,034 | 2,343,413 |
+
+
+![Naive Streaming Encoder](../assets/images/naive-cpu-flamegraph.png)
+
+
+Here’s the CPU flamegraph from the baseline naive streaming encoder (4 KB chunks, single-core). Two hotspots immediately jump out:
+- the bucket queue dominates the profile
+- the pair-lookup map consumes a large fraction of cycles
+
+Notice the giant mallocgc blocks; these aren’t "business logic"; they’re waste.
