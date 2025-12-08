@@ -128,7 +128,7 @@ And most importantly, much easier to optimize.
 | NaiveEncodeStreaming_4KBChunks |         10 | 462,254,429 | 11.34 | 1,830,937,034 | 2,343,413 |
 
 
-![Naive Streaming Encoder](../assets/images/naive-cpu-flamegraph.png)
+![Naive Streaming Encoder](/assets/images/naive-cpu-flamegraph.png)
 
 
 Here’s the CPU flamegraph from the baseline naive streaming encoder (4 KB chunks, single-core). Two hotspots immediately jump out:
