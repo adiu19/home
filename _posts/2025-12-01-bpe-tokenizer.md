@@ -68,6 +68,11 @@ It handled odd Unicode, edge cases, and controlled merges correctly.
 
 Performance was great (Go-great).
 
+| Benchmark                      | Iterations |       ns/op |  MB/s |          B/op | allocs/op |
+| ------------------------------ | ---------: | ----------: | ----: | ------------: | --------: |
+| NaiveEncodeStreaming_4KBChunks |         10 | 462,254,429 | 11.34 | 1,830,937,034 | 2,343,413 |
+
+
 This gave me the confidence to start the real challenge.
 
 Streaming.
