@@ -127,12 +127,34 @@ And most importantly, much easier to optimize.
 | ------------------------------ | ---------: | ----------: | ----: | ------------: | --------: |
 | NaiveEncodeStreaming_4KBChunks |         10 | 462,254,429 | 11.34 | 1,830,937,034 | 2,343,413 |
 
+Here’s the CPU flamegraph from the baseline naive streaming encoder (4 KB chunks, single-core).
 
 ![Naive Streaming Encoder](/assets/images/naive-cpu-flamegraph.png)
 
+In the flamegraph above, EncodeOffline dominates CPU time, but the real culprits are two internal operations:
+- Push/Pop for BucketQueue: responsible for ~35–45% of CPU time and millions of tiny allocations.
+- mapaccess (pair-rank lookups): another ~20–25%.
 
-Here’s the CPU flamegraph from the baseline naive streaming encoder (4 KB chunks, single-core). Two hotspots immediately jump out:
-- the bucket queue dominates the profile
-- the pair-lookup map consumes a large fraction of cycles
+Very little time is spent in actual “tokenization.”
 
-Notice the giant mallocgc blocks; these aren’t "business logic"; they’re waste.
+
+Here’s the Memory flamegraph from the baseline naive streaming encoder (4 KB chunks, single-core).
+
+![Naive Streaming Encoder](/assets/images/naive-mem-flamegraph.png)
+
+~84% of all memory allocated during tokenization comes from constructing the BucketQueue itself. From what I gather,
+- BucketQueue internally allocates one linked list per rank bucket
+- GPT-2 BPE has ~50K ranks
+- So the queue allocates tens of thousands of small slices / structs
+- This results in millions of small allocations
+
+At this point, I realized that BucketQueue is extremely memory-unfriendly and behaves catastrophically in Go’s allocator model.
+
+Even if we ignore the allocations from constructing the queue (which we shouldn't given the sheer volume), every push to the queue incurs:
+- A fresh struct
+- Repeated pointer chasing
+- Occasional slice growth in specific buckets
+
+Together these account for another 10% of total memory.
+
+The problem isn't BPE, it's the data structure.
