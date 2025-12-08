@@ -158,3 +158,47 @@ Even if we ignore the allocations from constructing the queue (which we shouldn'
 Together these account for another 10% of total memory.
 
 The problem isn't BPE, it's the data structure.
+
+### Optimization #1 — Preallocating Scratch Buffers
+
+The first hotspot I decided to tackle wasn’t even inside the merge loop - it was before the merge loop. Every call to the encoder rebuilt a bunch of internal working buffers (tokens, prev, next, live) and Go helpfully zeroed all of them. Zeroing memory is fast but not free. And when you're doing it for thousands of tokens per chunk, that work done starts adding up.
+
+The idea with this optimization was to reuse the scratch buffers between invocations and stop Go from silently zeroing everything unless absolutely necessary.
+
+We created two preparation paths:
+
+```
+sc.prepare(n)         // baseline: full slice zero-init
+sc.prepareNoZero(n)   // optimization
+```
+
+The important detail: we still intentionally zero liveVersion, because merge-candidate liveness depends on it. But the other slices (tokens, prev, next) don’t need clearing; we overwrite them entirely in the hot loop anyway. So this optimization reduces four zeroing passes down to one.
+
+#### Benchmark Results
+
+Before optimization
+
+```
+453,708,450 ns/op
+11.56 MB/s
+1830935921 B/op
+2343410 allocs/op
+```
+
+After optimization
+
+```
+438,773,696 ns/op
+11.95 MB/s
+1830929172 B/op
+2343386 allocs/op
+```
+
+The delta
+
+```
+~3.3% faster runtime
+~3.4% higher throughput
+Allocation counts: basically unchanged
+B/op: unchanged (as expected)
+```
