@@ -13,6 +13,9 @@ There are easier ways to spend your weekends. Building a GPT-2 tokenizer from sc
 
 This post is the story of how that happened: what I built, what broke, what I optimized, and what I learned about systems engineering by reconstructing one of the most universally used components in modern LLMs: the tokenizer.
 
+## The BPE Tokenizer
+TODO: add background, and what we are working with (the dataset specifically)
+
 ## Why Build a Tokenizer at All?
 If one's interested in **LLM infrastructure**, tokenizers are not optional. They sit at the front of _every_ inference and training pipeline and dictate throughput, correctness, and latency.
 
@@ -159,7 +162,7 @@ Together these account for another 10% of total memory.
 
 The problem isn't BPE, it's the data structure.
 
-### Optimization #1 — Preallocating Scratch Buffers
+### Optimization #1: Preallocating Scratch Buffers
 
 The first hotspot I decided to tackle wasn’t even inside the merge loop - it was before the merge loop. Every call to the encoder rebuilt a bunch of internal working buffers (tokens, prev, next, live) and Go helpfully zeroed all of them. Zeroing memory is fast but not free. And when you're doing it for thousands of tokens per chunk, that work done starts adding up.
 
@@ -201,4 +204,90 @@ The delta
 ~3.4% higher throughput
 Allocation counts: basically unchanged
 B/op: unchanged (as expected)
+```
+
+
+### Optimization #2: Reusing the Output Buffer and Eliminating the Final Copy
+
+Similar to the scratch buffer overhead, the next hotspot wasn’t inside the merge loop; it was at the tail of the algorithm, where we package and return the tokens. The naive version of the streaming encoder ended with this pattern:
+
+```
+out := make([]int, 0, n)
+for i := head; i != -1; i = next[i] {
+    out = append(out, tokens[i])
+}
+return out
+```
+
+There are two main issues at play here.
+
+1. A fresh buffer allocation every time
+Every chunk, we:
+- Allocate a brand-new slice
+- Grow it via appends
+- Touch memory that the GC now has to track
+
+This is wasteful, because for streaming workloads the shape of the output is predictable. A 4 KB chunk is always going to produce output in the same ballpark. There’s no reason to allocate a new buffer each time when the old one works just fine.
+
+So we replaced this with a reusable buffer:
+
+```
+st.outBuf = st.outBuf[:0]
+st.outBuf = append(st.outBuf, tokens...)
+```
+
+If the preallocated capacity is large enough (we picked 64K), we avoid:
+- new allocations
+- slice growth
+- GC pressure
+
+
+2. A full linear copy of the final tokens
+Even after we were done with all merges, we still copied the token sequence into a new slice before returning it. That’s a full linear pass over the data that adds nothing but latency.
+
+So we introduced a simple switch:
+
+```
+if st.OptNoCopyReturn {
+    return st.outBuf      // zero-copy return
+}
+out := make([]int, len(st.outBuf))
+copy(out, st.outBuf)
+return out
+```
+
+When `OptNoCopyReturn` is enabled, we skip the copy entirely and return a slice header that points directly into the reusable buffer.
+
+For streaming workloads where the consumer immediately processes the tokens, this is perfectly safe and much faster.
+
+
+
+#### Benchmark Results
+
+Before (after opt-1):
+
+```
+438,773,696 ns/op
+11.95 MB/s
+1830929172 B/op
+2343386 allocs/op
+```
+
+After (opt-1 + outBuf reuse + no-copy return):
+
+```
+424,314,562 ns/op
+12.36 MB/s
+1799468104 B/op
+2342093 allocs/op
+```
+
+
+The delta
+
+```
+- ~6.5% faster
+- ~31 MB less memory allocated per encode
+- ~1,300 fewer allocations per encode
+
 ```
