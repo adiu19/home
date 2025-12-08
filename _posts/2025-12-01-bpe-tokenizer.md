@@ -138,7 +138,7 @@ In the flamegraph above, EncodeOffline dominates CPU time, but the real culprits
 Very little time is spent in actual “tokenization.”
 
 
-Here’s the Memory flamegraph from the baseline naive streaming encoder (4 KB chunks, single-core).
+Here’s the memory flamegraph from the baseline naive streaming encoder (4 KB chunks, single-core).
 
 ![Naive Streaming Encoder](/assets/images/naive-mem-flamegraph.png)
 

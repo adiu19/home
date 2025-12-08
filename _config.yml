@@ -58,7 +58,6 @@ plugins:
   - jekyll-include-cache
 
 author:
-  name   : "Aditya Upadhyaya"
   avatar : "/assets/images/3.png"
   bio    : "Thoughts gathered, chaos tamed."
   location: "Mountain View, CA"
