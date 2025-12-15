@@ -14,12 +14,7 @@ There are easier ways to spend your weekends. Building a GPT-2 tokenizer from sc
 This post is the story of how that happened: what I built, what broke, what I optimized, and what I learned about systems engineering by reconstructing one of the most universally used components in modern LLMs: the tokenizer.
 
 ## The BPE Tokenizer
-A tokenizer is the first step in almost every modern language model pipeline. Its job is simple in spirit but critical in practice: convert raw text into a sequence of integer IDs that a model can process. For example:
-
-```
-"Hello world!"
-→ [15496, 995, 0]
-```
+A tokenizer is the first step in almost every modern language model pipeline. Its job is simple in spirit but critical in practice: convert raw text into a sequence of integer IDs that a model can process. For example: `"Hello world!"` can be encoded as `[15496, 995, 0]`.
 
 These integers correspond to entries in a fixed vocabulary learned during model training.
 
