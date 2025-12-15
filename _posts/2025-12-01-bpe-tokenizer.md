@@ -147,11 +147,11 @@ Eventually, I stepped back.
 
 I realized something important:
 
-**Production tokenizers don’t use fully incremental streaming BPE. The complexity isn’t worth the cost.**
+**Fully incremental streaming BPE is elegant, but the complexity quickly becomes the main thing you’re managing.**
 
 That was a turning point.
 
-Streaming BPE is beautiful, but the right move at the time for me was to **stop, and optimize the naive streaming encoder instead.**
+The right move at the time for me was to **stop, and optimize the naive streaming encoder instead.**
 
 ## The Optimization Journey
 
@@ -219,7 +219,7 @@ The problem isn't BPE, it's the data structure.
 
 ### Optimization #1: FastLookup
 
-In the naive implementation, every time the encoder considers merging two adjacent tokens (a, b), it performs a lookup into a Go map keyed by (a << 32) | b. In a streaming BPE encoder, this happens thousands of times per 4KB chunk. Instead of hashing (a, b) on every check, we can trade a small, fixed amount of memory for a direct indexed lookup. We introduce a dense 2D lookup table for common merge pairs:
+In the naive implementation, every time the encoder considers merging two adjacent tokens (a, b), it performs a lookup into a Go map keyed by `(a << 32) | b`. In a streaming BPE encoder, this happens thousands of times per 4KB chunk. Instead of hashing (a, b) on every check, we can trade a small, fixed amount of memory for a direct indexed lookup. We introduce a dense 2D lookup table for common merge pairs:
 
 ```
 fastLookup[a][b] -> packed merge info
@@ -403,10 +403,13 @@ The Delta
 - ~1,300 fewer allocations per encode
 ```
 
-![Naive Streaming Encoder with Opt 3: CPU Flamegraph](/assets/images/opt3-cpu-flamegraph.png)
 ![Naive Streaming Encoder with Opt 3: Memory Flamegraph](/assets/images/opt3-mem-flamegraph.png)
 
-The memory flamegraph shows a clear reduction in allocation pressure at the tail of the encoding pipeline, reflecting the elimination of per-chunk output allocations and copies. The CPU flamegraph shows a small reduction in runtime overhead associated with allocation, slice growth, and memory copying. The core merge logic remains unchanged.
+The memory flamegraph shows a clear reduction in allocation pressure at the tail of the encoding pipeline, reflecting the elimination of per-chunk output allocations and copies. 
+
+![Naive Streaming Encoder with Opt 3: CPU Flamegraph](/assets/images/opt3-cpu-flamegraph.png)
+
+The CPU flamegraph shows a small reduction in runtime overhead associated with allocation, slice growth, and memory copying. The core merge logic remains unchanged.
 
 ## Putting it all together
 
