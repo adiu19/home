@@ -83,8 +83,6 @@ I wanted:
 
 I quickly learned: this is way harder than it sounds.
 
-TODO: add invariants
-
 ## The Underestimate: BPE is simple, right?
 
 Before this project, I thought tokenization was basically:
@@ -238,7 +236,7 @@ return fallbackMap[key]
 
 The fast lookup table is sized (N, N). Increasing N increases the hit rate of the fast path and reduces fallback map lookups and in fact, larger values did produce additional speedups in experiments. However, for the purposes of this post, the goal is not to find a globally optimal cutoff, but to demonstrate an optimization pattern: replacing hash-based lookups in the hot loop with bounded, direct memory access. N = 2048 strikes a reasonable balance for illustrating the idea without introducing excessive memory overhead.
 
-Here’s the CPU flamegraph after the first optimization naive streaming encoder (4 KB chunks, single-core).
+Here’s the CPU flamegraph after the first optimization of the naive streaming encoder (4 KB chunks, single-core).
 
 ![Naive Streaming Encoder with Opt 1](/assets/images/opt1-cpu-flamegraph.png)
 
@@ -275,7 +273,7 @@ B/op: unchanged (expected)
 
 After addressing pair lookup in the hot loop, the next source of overhead showed up before the merge loop even begins. Each call to the encoder rebuilds a set of internal scratch buffers: `tokens`, `prev`, `next`, `liveVersion`.
 
-In the naive implementation, these slices are freshly prepared on every invocation, and Go helpfully zero-initializes all of them. Zeroing memory is fast, but not free and in our case it showed up as a small, but measurable, component of per-chunk overhead once the larger hotspots were removed.
+In the naive implementation, these slices are freshly prepared on every invocation, and Go helpfully zero-initializes all of them. Zeroing memory is fast, but not free and, in our case, it showed up as a small, but measurable, component of per-chunk overhead once the larger hotspots were removed.
 
 The key observation here is that most of these buffers do not actually need to be cleared. During encoding:
 - `tokens`, `prev`, and `next` are fully overwritten in the hot loop
