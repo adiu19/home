@@ -262,7 +262,7 @@ After:
 2343350 allocs/op
 ```
 
-The Delta
+The Delta:
 
 ```
 ~41% faster runtime
@@ -290,7 +290,7 @@ sc.prepareNoZero(n)   // optimization
 
 #### Benchmark Results
 
-Before
+Before:
 
 ```
 383,143,150 ns/op
@@ -299,7 +299,7 @@ Before
 2343350 allocs/op
 ```
 
-After
+After:
 
 ```
 380,274,475 ns/op
@@ -308,7 +308,7 @@ After
 2343360 allocs/op
 ```
 
-The Delta
+The Delta:
 
 ```
 - ~1% faster runtime
@@ -337,8 +337,8 @@ return out
 
 There are two main issues at play here.
 
-1. A fresh buffer allocation every time
-Every chunk, we:
+#### 1. A fresh buffer allocation every time
+On every chunk, we:
 - Allocate a brand-new slice
 - Grow it via appends
 - Touch memory that the GC now has to track
@@ -357,7 +357,7 @@ If the preallocated capacity is large enough (we picked 64K), we avoid:
 - slice growth
 - GC pressure
 
-2. A full linear copy of the final tokens
+#### 2. A full linear copy of the final tokens
 Even after we were done with all merges, we still copied the token sequence into a new slice before returning it. That’s a full linear pass over the data that adds nothing but latency.
 
 So we introduced a simple switch:
@@ -374,6 +374,14 @@ return out
 When `OptNoCopyReturn` is enabled, we skip the copy entirely and return a slice header that points directly into the reusable buffer.
 
 For streaming workloads where the consumer immediately processes the tokens, this is perfectly safe and much faster.
+
+![Naive Streaming Encoder with Opt 3: Memory Flamegraph](/assets/images/opt3-mem-flamegraph.png)
+
+The memory flamegraph shows a clear reduction in allocation pressure at the tail of the encoding pipeline, reflecting the elimination of per-chunk output allocations and copies. 
+
+![Naive Streaming Encoder with Opt 3: CPU Flamegraph](/assets/images/opt3-cpu-flamegraph.png)
+
+The CPU flamegraph shows a small reduction in runtime overhead associated with allocation, slice growth, and memory copying. The core merge logic remains unchanged.
 
 #### Benchmark Results
 
@@ -395,21 +403,13 @@ After:
 2342068 allocs/op
 ```
 
-The Delta
+The Delta:
 
 ```
 - ~1.2% faster runtime
 - ~31 MB less memory allocated per encode
 - ~1,300 fewer allocations per encode
 ```
-
-![Naive Streaming Encoder with Opt 3: Memory Flamegraph](/assets/images/opt3-mem-flamegraph.png)
-
-The memory flamegraph shows a clear reduction in allocation pressure at the tail of the encoding pipeline, reflecting the elimination of per-chunk output allocations and copies. 
-
-![Naive Streaming Encoder with Opt 3: CPU Flamegraph](/assets/images/opt3-cpu-flamegraph.png)
-
-The CPU flamegraph shows a small reduction in runtime overhead associated with allocation, slice growth, and memory copying. The core merge logic remains unchanged.
 
 ## Putting it all together
 
@@ -427,4 +427,4 @@ Overall, compared to the baseline:
 
 What surprised me most while working on this was that even after getting a correct, naive implementation of BPE in place, a lot of the remaining difficulty lived outside the algorithm itself. The tricky part was everything around it: how often certain paths execute, where allocations sneak in, and how small, reasonable choices compound when they sit in a hot loop.
 
-In the next few posts, I’ll zoom out from tokenization and look at KV caches and inference-time optimizations, and how those systems interact with tokenization in practice.
+Over the next few posts, I’ll zoom out from tokenization and look at KV caches and inference-time optimizations, and how those systems interact with tokenization in practice.
