@@ -166,16 +166,25 @@ No cross-boundary merging but extremely practical.
 
 And most importantly, much easier to optimize.
 
-### A short detour onto the benchmarking setup
-TODO
+### A short detour on the benchmarking setup
 
+All measurements in this post come from a single Go benchmark designed to reflect a realistic streaming tokenization workload.
+
+At a high level, the benchmark:
+- feeds the encoder 4 KB chunks of input text
+- runs the streaming encoder end-to-end on each chunk
+- measures wall-clock time, throughput, allocations, and allocation volume
+
+Each benchmark was run:
+- with GOMAXPROCS=1 to isolate single-core behavior
+- using Go’s built-in benchmarking harness (testing.B)
+- with CPU and memory profiles collected via pprof
 
 ### Profiling the Naive Streaming Encoder: Where the Time Actually Goes
 
 | Benchmark                              | Iterations | Time (ns/op) | Throughput (MB/s) | Bytes/op        | Allocs/op |
 |---------------------------------------|------------|--------------|-------------------|-----------------|-----------|
 | BenchmarkNaiveEncodeStreaming_4KBChunks | 10         | 540,239,550  | 9.70              | 1,830,942,153   | 2,343,402 |
-
 
 Here’s the CPU flamegraph from the baseline naive streaming encoder (4 KB chunks, single-core).
 
@@ -229,7 +238,6 @@ return fallbackMap[key]
 
 The fast lookup table is sized (N, N). Increasing N increases the hit rate of the fast path and reduces fallback map lookups and in fact, larger values did produce additional speedups in experiments. However, for the purposes of this post, the goal is not to find a globally optimal cutoff, but to demonstrate an optimization pattern: replacing hash-based lookups in the hot loop with bounded, direct memory access. N = 2048 strikes a reasonable balance for illustrating the idea without introducing excessive memory overhead.
 
-
 Here’s the CPU flamegraph after the first optimization naive streaming encoder (4 KB chunks, single-core).
 
 ![Naive Streaming Encoder with Opt 1](/assets/images/opt1-cpu-flamegraph.png)
@@ -280,8 +288,6 @@ sc.prepare(n)         // baseline: full slice zero-init
 sc.prepareNoZero(n)   // optimization
 ```
 
-
-
 #### Benchmark Results
 
 Before
@@ -302,13 +308,13 @@ After
 2343360 allocs/op
 ```
 
-The delta
+The Delta
 
 ```
-~1% faster runtime
-~1% higher throughput
-Allocation count: unchanged
-B/op: unchanged (expected)
+- ~1% faster runtime
+- ~1% higher throughput
+- Allocation count: unchanged
+- B/op: unchanged (expected)
 ```
 
 ![Naive Streaming Encoder with Opt 2](/assets/images/opt2-cpu-flamegraph.png)
@@ -317,7 +323,7 @@ The CPU flamegraph shows a small reduction in runtime overhead associated with s
 
 This particular optimization doesn’t move the needle nearly as much as eliminating hash-map lookups, but it removes unnecessary work from a performance-critical path at essentially zero cost in complexity.
 
-### Optimization #2: Reusing the Output Buffer and Eliminating the Final Copy
+### Optimization #3: Reusing the Output Buffer and Eliminating the Final Copy
 
 Similar to the scratch buffer overhead, the next hotspot wasn’t inside the merge loop; it was at the tail of the algorithm, where we package and return the tokens. The naive version of the streaming encoder ended with this pattern:
 
@@ -351,7 +357,6 @@ If the preallocated capacity is large enough (we picked 64K), we avoid:
 - slice growth
 - GC pressure
 
-
 2. A full linear copy of the final tokens
 Even after we were done with all merges, we still copied the token sequence into a new slice before returning it. That’s a full linear pass over the data that adds nothing but latency.
 
@@ -370,34 +375,53 @@ When `OptNoCopyReturn` is enabled, we skip the copy entirely and return a slice 
 
 For streaming workloads where the consumer immediately processes the tokens, this is perfectly safe and much faster.
 
-
-
 #### Benchmark Results
 
-Before (after opt-1):
+Before:
 
 ```
-438,773,696 ns/op
-11.95 MB/s
-1830929172 B/op
-2343386 allocs/op
+380,274,475 ns/op
+13.79 MB/s
+1830930540 B/op
+2343360 allocs/op
 ```
 
-After (opt-1 + outBuf reuse + no-copy return):
+After:
 
 ```
-424,314,562 ns/op
-12.36 MB/s
-1799468104 B/op
-2342093 allocs/op
+375,547,250 ns/op
+13.96 MB/s
+1799469576 B/op
+2342068 allocs/op
 ```
 
-
-The delta
+The Delta
 
 ```
-- ~6.5% faster
+- ~1.2% faster runtime
+- ~31 MB less memory allocated per encode
+- ~1,300 fewer allocations per encode
+```
+
+![Naive Streaming Encoder with Opt 3: CPU Flamegraph](/assets/images/opt3-cpu-flamegraph.png)
+![Naive Streaming Encoder with Opt 3: Memory Flamegraph](/assets/images/opt3-mem-flamegraph.png)
+
+The memory flamegraph shows a clear reduction in allocation pressure at the tail of the encoding pipeline, reflecting the elimination of per-chunk output allocations and copies. The CPU flamegraph shows a small reduction in runtime overhead associated with allocation, slice growth, and memory copying. The core merge logic remains unchanged.
+
+## Putting it all together
+
+Starting from a naive streaming BPE encoder, we incrementally applied three optimizations, each targeting a different class of overhead:
+
+1. FastLookup routed most merge-pair lookups through a bounded 2D table, with a fallback map for the remaining cases.
+2. Scratch buffer reuse trimmed redundant setup work before encoding begins.
+3. Output buffer reuse and zero-copy return eliminated avoidable allocations and copying at the tail.
+
+Overall, compared to the baseline:
+- ~44% faster runtime
+- ~44% higher throughput
 - ~31 MB less memory allocated per encode
 - ~1,300 fewer allocations per encode
 
-```
+What surprised me most while working on this was that even after getting a correct, naive implementation of BPE in place, a lot of the remaining difficulty lived outside the algorithm itself. The tricky part was everything around it: how often certain paths execute, where allocations sneak in, and how small, reasonable choices compound when they sit in a hot loop.
+
+In the next few posts, I’ll zoom out from tokenization and look at KV caches and inference-time optimizations, and how those systems interact with tokenization in practice.
