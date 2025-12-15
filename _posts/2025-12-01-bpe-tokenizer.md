@@ -64,9 +64,7 @@ Because why not.
 
 ## The Goal
 
-The goal wasn’t just to encode text.
-
-It was to build:
+The goal wasn’t just to encode text. It was to build:
 
 **A streaming-friendly, GPT-2 tokenizer in Go, with exact round-trip parity.**
 
@@ -85,9 +83,7 @@ Before this project, I thought tokenization was basically:
 2. Greedily merge pairs.
 3. Done.
 
-I was wrong.
-
-What's usually hidden in subtext is that BPE merging is quite convoluted and involves:
+I was wrong. What's usually hidden in subtext is that BPE merging is quite convoluted and involves:
 
 - priority queues
 - adjacency maintenance
@@ -104,12 +100,9 @@ The offline greedy BPE encoder was the first major milestone.
 
 It worked. It matched Hugging Face.  
 It passed all round-trip tests.  
-It handled odd Unicode, edge cases, and controlled merges correctly.
+It handled odd unicode, edge cases, and controlled merges correctly.
 
-
-This gave me the confidence to start the real challenge.
-
-Streaming.
+This gave me the confidence to start the real challenge - streaming.
 
 ## Where Things Got Spicy: The Streaming Encoder
 
@@ -125,26 +118,19 @@ Streaming requires:
 - dynamically adjusting a tail-reserve so merges don’t cross uncommitted boundaries
 - rewriting heap candidates without invalidating active merges
     
-This part of the project consumed _weeks_.
-
-I rewrote large sections and repeatedly reached states where invariants failed in unpredictable ways.
+This part of the project consumed _weeks_. I rewrote large sections and repeatedly reached states where invariants failed in unpredictable ways.
 
 I hit issues like:
-
 - stale heap candidates creating illegal merges
 - cross-boundary merges misfiring
 - node liveness drifting out of sync
 - adjacency pointers failing in ways I wasn't aware of
 
-Eventually, I stepped back.
-
-I realized something important:
+Eventually, I stepped back and realized something important:
 
 **Fully incremental streaming BPE is elegant, but the complexity quickly becomes the main thing you’re managing.**
 
-That was a turning point.
-
-The right move at the time for me was to **stop, and optimize the naive streaming encoder instead.**
+That was a turning point. The right move at the time for me was to **stop, and optimize the naive streaming encoder instead.**
 
 ## The Optimization Journey
 
@@ -155,9 +141,7 @@ The naive streaming encoder is simple:
 - run offline BPE on each chunk
 - concatenate results
 
-No cross-boundary merging but extremely practical.
-
-And most importantly, much easier to optimize.
+No cross-boundary merging but extremely practical. And most importantly, much easier to optimize.
 
 ### A short detour on the benchmarking setup
 
@@ -206,9 +190,7 @@ Even if we ignore the allocations from constructing the queue (which we shouldn'
 - Repeated pointer chasing
 - Occasional slice growth in specific buckets
 
-Together these account for another 10% of total memory.
-
-The problem isn't BPE, it's the data structure.
+Together these account for another 10% of total memory. The problem isn't BPE, it's the data structure.
 
 ### Optimization #1: FastLookup
 
