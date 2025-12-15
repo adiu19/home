@@ -14,10 +14,52 @@ There are easier ways to spend your weekends. Building a GPT-2 tokenizer from sc
 This post is the story of how that happened: what I built, what broke, what I optimized, and what I learned about systems engineering by reconstructing one of the most universally used components in modern LLMs: the tokenizer.
 
 ## The BPE Tokenizer
-TODO: add background, and what we are working with (the dataset specifically)
+A tokenizer is the first step in almost every modern language model pipeline. Its job is simple in spirit but critical in practice: convert raw text into a sequence of integer IDs that a model can process. For example:
 
-## Why Build a Tokenizer at All?
-If one's interested in **LLM infrastructure**, tokenizers are not optional. They sit at the front of _every_ inference and training pipeline and dictate throughput, correctness, and latency.
+```
+"Hello world!"
+→ [15496, 995, 0]
+```
+
+These integers correspond to entries in a fixed vocabulary learned during model training.
+
+Every request to a large language model whether for inference or training, goes through a tokenizer first. That makes tokenization part of the critical path for latency-sensitive systems like:
+- inference servers
+- chat applications
+- streaming generation APIs
+- real-time classification systems
+
+If tokenization is slow, everything downstream is slow.
+
+Most modern LLMs (GPT-2, GPT-3, GPT-4 class models) use Byte Pair Encoding (BPE) or close variants.
+
+At a high level, BPE works like this:
+1. Start with raw text as bytes (values 0–255)
+2. Repeatedly merge the most frequent adjacent byte/token pairs
+3. Each merge produces a new token
+4. Continue until no more applicable merges exist
+
+The result is a vocabulary of:
+- single bytes
+- short character sequences
+- common substrings (e.g. "ing", "tion", "http")
+
+BPE is attractive because it:
+- handles arbitrary UTF-8 text
+- balances vocabulary size vs. expressiveness
+- compresses common patterns efficiently
+
+But it has a downside: tokenization is not just a lookup, it’s an algorithm. At runtime, a BPE tokenizer must repeatedly:
+1. scan adjacent token pairs
+2. check whether (a, b) is mergeable
+3. compare merge ranks
+4. apply the best merge
+5. update neighboring pairs and all of this usually involves thousands of pair lookups per chunk of text.
+
+
+
+## Why Rebuild a Tokenizer at all?
+If one's interested in **LLM infrastructure**, tokenizers are not optional. Most production tokenizers are treated as black boxes but that abstraction leaks quickly once we start caring about end-to-end latency, memory patterns, and streaming inputs.
 
 I wanted to understand what was actually happening inside. So I rebuilt it - byte-pair encoding, vocab parsing, merges, greedy selection, token mapping, streaming semantics, all of it.
 
@@ -40,6 +82,8 @@ I wanted:
 - Benchmarks.
 
 I quickly learned: this is way harder than it sounds.
+
+TODO: add invariants
 
 ## The Underestimate: BPE is simple, right?
 
@@ -118,17 +162,16 @@ The naive streaming encoder is simple:
 - run offline BPE on each chunk
 - concatenate results
 
-
 No cross-boundary merging but extremely practical.
 
 And most importantly, much easier to optimize.
 
-
 ### Profiling the Naive Streaming Encoder: Where the Time Actually Goes
 
-| Benchmark                      | Iterations |       ns/op |  MB/s |          B/op | allocs/op |
-| ------------------------------ | ---------: | ----------: | ----: | ------------: | --------: |
-| NaiveEncodeStreaming_4KBChunks |         10 | 462,254,429 | 11.34 | 1,830,937,034 | 2,343,413 |
+| Benchmark                              | Iterations | Time (ns/op) | Throughput (MB/s) | Bytes/op        | Allocs/op |
+|---------------------------------------|------------|--------------|-------------------|-----------------|-----------|
+| BenchmarkNaiveEncodeStreaming_4KBChunks | 10         | 540,239,550  | 9.70              | 1,830,942,153   | 2,343,402 |
+
 
 Here’s the CPU flamegraph from the baseline naive streaming encoder (4 KB chunks, single-core).
 
