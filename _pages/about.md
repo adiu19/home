@@ -6,7 +6,7 @@ subtitle: Mountain View, CA
 
 profile:
   align: right
-  image: prof_pic.png
+  image:
   image_circular: false
   more_info:
 
@@ -21,7 +21,5 @@ latest_posts:
   scrollable: true
   limit: 5
 ---
-
-Professional over-thinker with a penchant for science and a love for video games that borders on obsession.
 
 I write about distributed systems, LLM infrastructure, and software engineering.
