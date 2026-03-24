@@ -1,13 +1,15 @@
 ---
+layout: post
 title: "Building a GPT-2 Tokenizer in Go"
-date: 2025-12-01T02:37:04-04:00
+date: 2025-12-01
+description: "Rebuilding a GPT-2 BPE tokenizer from scratch in Go, with benchmarks and optimization deep-dives."
 categories:
-  - Distributed Systems
   - Large Language Models
 tags:
-  - Distributed Systems
   - Large Language Models
---- 
+  - Go
+giscus_comments: false
+---
 
 There are easier ways to spend your weekends. Building a GPT-2 tokenizer from scratch is not one of them. But somewhere between reading Karpathy’s "Zero to Hero", benchmarking Go’s runtime behavior at 2AM, and debating whether my slice reallocation was "morally acceptable", I fell down a rabbit hole.
 
@@ -165,7 +167,7 @@ Each benchmark was run:
 
 Here’s the CPU flamegraph from the baseline naive streaming encoder (4 KB chunks, single-core).
 
-![Naive Streaming Encoder](/assets/images/naive-cpu-flamegraph.png)
+![Naive Streaming Encoder](/assets/img/naive-cpu-flamegraph.png)
 
 In the flamegraph above, EncodeOffline dominates CPU time, but the real culprits are two internal operations:
 - Push/Pop for BucketQueue: responsible for ~35–45% of CPU time and millions of tiny allocations.
@@ -175,7 +177,7 @@ Very little time is spent doing "useful compute" versus runtime overhead: hash-m
 
 Here’s the memory flamegraph from the baseline naive streaming encoder (4 KB chunks, single-core).
 
-![Naive Streaming Encoder](/assets/images/naive-mem-flamegraph.png)
+![Naive Streaming Encoder](/assets/img/naive-mem-flamegraph.png)
 
 ~84% of all memory allocated during tokenization comes from constructing the BucketQueue itself. From what I gather,
 - BucketQueue internally allocates one linked list per rank bucket
@@ -215,7 +217,7 @@ The fast lookup table is sized (N, N). Increasing N increases the hit rate of th
 
 Here’s the CPU flamegraph after the first optimization of the naive streaming encoder (4 KB chunks, single-core).
 
-![Naive Streaming Encoder with Opt 1](/assets/images/opt1-cpu-flamegraph.png)
+![Naive Streaming Encoder with Opt 1](/assets/img/opt1-cpu-flamegraph.png)
 
 #### Benchmark Results
 
@@ -292,7 +294,7 @@ The Delta:
 - B/op: unchanged (expected)
 ```
 
-![Naive Streaming Encoder with Opt 2](/assets/images/opt2-cpu-flamegraph.png)
+![Naive Streaming Encoder with Opt 2](/assets/img/opt2-cpu-flamegraph.png)
 
 The CPU flamegraph shows a small reduction in runtime overhead associated with slice preparation and memory clearing.
 
@@ -350,11 +352,11 @@ When `OptNoCopyReturn` is enabled, we skip the copy entirely and return a slice 
 
 For streaming workloads where the consumer immediately processes the tokens, this is perfectly safe and much faster.
 
-![Naive Streaming Encoder with Opt 3: Memory Flamegraph](/assets/images/opt3-mem-flamegraph.png)
+![Naive Streaming Encoder with Opt 3: Memory Flamegraph](/assets/img/opt3-mem-flamegraph.png)
 
 The memory flamegraph shows a clear reduction in allocation pressure at the tail of the encoding pipeline, reflecting the elimination of per-chunk output allocations and copies. 
 
-![Naive Streaming Encoder with Opt 3: CPU Flamegraph](/assets/images/opt3-cpu-flamegraph.png)
+![Naive Streaming Encoder with Opt 3: CPU Flamegraph](/assets/img/opt3-cpu-flamegraph.png)
 
 The CPU flamegraph shows a small reduction in runtime overhead associated with allocation, slice growth, and memory copying. The core merge logic remains unchanged.
 

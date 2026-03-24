@@ -1,12 +1,15 @@
 ---
+layout: post
 title: "Client-Side Service Discovery"
-date: 2024-01-09T02:37:04-04:00
+date: 2024-01-09
+description: "An exploration of client-side service discovery patterns in distributed systems."
 categories:
   - Distributed Systems
 tags:
   - Distributed Systems
   - Microservice Patterns
---- 
+giscus_comments: false
+---
 
 ## Why do we need Service Discovery?
 Applications we build today have one commonality - they all, more or less, make network calls to external processes and to make such a call, we require the _address_ of the process. We could, in theory, keep those fields somewhere in a static configuration assuming we know them, but the server instance on which the process is hosted changes frequently owing to failures and auto-scaling.
