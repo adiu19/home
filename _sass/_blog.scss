@@ -152,6 +152,20 @@
   }
 }
 
+// Constrain images in blog posts
+.post {
+  .post-content {
+    img {
+      max-width: 75%;
+      height: auto;
+      display: block;
+      margin: 1.5rem auto;
+      border-radius: 4px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    }
+  }
+}
+
 .post-description {
   margin-bottom: 2rem;
   font-size: 0.875rem;
