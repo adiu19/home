@@ -9,3 +9,24 @@ document.addEventListener("readystatechange", () => {
     }
   }
 });
+
+// Stripe-style single-key navigation shortcuts
+document.addEventListener("keydown", (e) => {
+  // Don't trigger when typing in inputs, textareas, or contenteditable elements
+  const tag = e.target.tagName.toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select" || e.target.isContentEditable) return;
+
+  // Don't trigger with modifier keys (except shift for uppercase)
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+  // Don't trigger if search modal is open
+  const ninja = document.querySelector("ninja-keys");
+  if (ninja && ninja.visible) return;
+
+  const key = e.key.toUpperCase();
+  const link = document.querySelector(`.nav-link[data-shortcut="${key}"]`);
+  if (link) {
+    e.preventDefault();
+    link.click();
+  }
+});

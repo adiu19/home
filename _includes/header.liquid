@@ -48,8 +48,9 @@
 
           <!-- About -->
           <li class="nav-item {% if page.permalink == '/' %}active{% endif %}">
-            <a class="nav-link" href="{{ '/' | relative_url }}">
+            <a class="nav-link" href="{{ '/' | relative_url }}" data-shortcut="{{ about_title | slice: 0 | upcase }}">
               {{- about_title }}
+              <kbd class="nav-shortcut">{{ about_title | slice: 0 | upcase }}</kbd>
               {% if page.permalink == '/' %}
                 <span class="sr-only">(current)</span>
               {% endif %}
@@ -107,8 +108,9 @@
                   {%- else -%}
                     {%- assign url = p.url -%}
                   {%- endif %}
-                  <a class="nav-link" href="{{ url | relative_url }}">
+                  <a class="nav-link" href="{{ url | relative_url }}" data-shortcut="{{ p.title | slice: 0 | upcase }}">
                     {{- p.title }}
+                    <kbd class="nav-shortcut">{{ p.title | slice: 0 | upcase }}</kbd>
                     {% if page.url contains p.url %}
                       <span class="sr-only">(current)</span>
                     {% endif %}

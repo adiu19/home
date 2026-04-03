@@ -188,3 +188,32 @@
     color: var(--global-hover-color);
   }
 }
+
+// Stripe-style keyboard shortcut badges
+.nav-shortcut {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.65rem;
+  font-family: inherit;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--global-text-color);
+  background-color: transparent;
+  border: 1px solid var(--global-divider-color);
+  border-radius: 4px;
+  opacity: 0.5;
+  vertical-align: middle;
+  transition: opacity 0.2s ease;
+}
+
+.nav-link:hover .nav-shortcut {
+  opacity: 0.8;
+}
+
+// Hide shortcut badges on mobile
+@media (max-width: 575.98px) {
+  .nav-shortcut {
+    display: none;
+  }
+}
