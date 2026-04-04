@@ -11,9 +11,7 @@ tags:
 giscus_comments: false
 ---
 
-There are easier ways to spend your weekends. Building a GPT-2 tokenizer from scratch is not one of them. But somewhere between reading Karpathy’s "Zero to Hero", benchmarking Go’s runtime behavior at 2AM, and debating whether my slice reallocation was "morally acceptable", I fell down a rabbit hole.
-
-This post is the story of how that happened: what I built, what broke, what I optimized, and what I learned about systems engineering by reconstructing one of the most universally used components in modern LLMs: the tokenizer.
+I rebuilt a GPT-2 BPE tokenizer from scratch in Go — offline encoding, streaming support, and three rounds of optimization. This post covers what I built, what broke, and what the benchmarks revealed.
 
 ## The BPE Tokenizer
 A tokenizer is the first step in almost every modern language model pipeline. Its job is simple in spirit but critical in practice: convert raw text into a sequence of integer IDs that a model can process. For example: `"Hello world!"` can be encoded as `[15496, 995, 0]`.
@@ -58,34 +56,15 @@ But it has a downside: tokenization is not just a lookup, it’s an algorithm. A
 ## Why Rebuild a Tokenizer at all?
 If one's interested in **LLM infrastructure**, tokenizers are not optional. Most production tokenizers are treated as black boxes but that abstraction leaks quickly once we start caring about end-to-end latency, memory patterns, and streaming inputs.
 
-I wanted to understand what was actually happening inside. So I rebuilt it - byte-pair encoding, vocab parsing, merges, greedy selection, token mapping, streaming semantics, all of it.
-
-In Go.
-
-Because why not.
+I wanted to understand what was actually happening inside. So I rebuilt it in Go — byte-pair encoding, vocab parsing, merges, greedy selection, token mapping, streaming semantics, all of it.
 
 ## The Goal
 
-The goal wasn’t just to encode text. It was to build:
-
-**A streaming-friendly, GPT-2 tokenizer in Go, with exact round-trip parity.**
-
-I wanted:
-- No hidden allocations.
-- No unnecessary copies.
-- Streaming support for chunked text.
-- Benchmarks.
-
-I quickly learned: this is way harder than it sounds.
+The goal was a streaming-friendly GPT-2 tokenizer in Go with exact round-trip parity, minimal allocations, no unnecessary copies, and proper benchmarks.
 
 ## The Underestimate: BPE is simple, right?
 
-Before this project, I thought tokenization was basically:
-1. Load vocab.
-2. Greedily merge pairs.
-3. Done.
-
-I was wrong. What's usually hidden in subtext is that BPE merging is quite convoluted and involves:
+BPE looks simple on the surface — load vocab, greedily merge pairs, done — but the actual implementation involves:
 
 - priority queues
 - adjacency maintenance
@@ -98,15 +77,9 @@ I was wrong. What's usually hidden in subtext is that BPE merging is quite convo
 
 ## The First Win: Offline Encoder Working
 
-The offline greedy BPE encoder was the first major milestone.
+The offline greedy BPE encoder came first. It matched Hugging Face's output, passed all round-trip tests, and handled odd unicode and edge cases correctly. With that working, the next step was streaming.
 
-It worked. It matched Hugging Face.  
-It passed all round-trip tests.  
-It handled odd unicode, edge cases, and controlled merges correctly.
-
-This gave me the confidence to start the real challenge - streaming.
-
-## Where Things Got Spicy: The Streaming Encoder
+## The Streaming Encoder
 
 Streaming is not "offline but in chunks".
 
@@ -128,15 +101,11 @@ I hit issues like:
 - node liveness drifting out of sync
 - adjacency pointers failing in ways I wasn't aware of
 
-Eventually, I stepped back and realized something important:
-
-**Fully incremental streaming BPE is elegant, but the complexity quickly becomes the main thing you’re managing.**
-
-That was a turning point. The right move at the time for me was to **stop, and optimize the naive streaming encoder instead.**
+Fully incremental streaming BPE is elegant, but the complexity was outpacing the benefit. I dropped it and focused on optimizing the naive streaming encoder instead.
 
 ## The Optimization Journey
 
-Once the incremental encoder was deprioritized, something magical happened. I could finally treat tokenization like an optimization problem, not a correctness war.
+With the incremental encoder shelved, I could treat tokenization as an optimization problem instead of a correctness war.
 
 The naive streaming encoder is simple:
 - break input into chunks
@@ -402,6 +371,6 @@ Overall, compared to the baseline:
 - ~31 MB less memory allocated per encode
 - ~1,300 fewer allocations per encode
 
-What surprised me most while working on this was that even after getting a correct, naive implementation of BPE in place, a lot of the remaining difficulty lived outside the algorithm itself. The tricky part was everything around it: how often certain paths execute, where allocations sneak in, and how small, reasonable choices compound when they sit in a hot loop.
+Most of the remaining difficulty lived outside the algorithm itself — how often certain paths execute, where allocations sneak in, and how small, reasonable choices compound in a hot loop.
 
 Over the next few posts, I’ll zoom out from tokenization and look at KV caches and inference-time optimizations, and how those systems interact with tokenization in practice.
