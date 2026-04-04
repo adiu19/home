@@ -58,7 +58,7 @@ google_analytics:
 # -----------------------------------------------------------------------------
 
 blog_name: Clustered Thoughts
-blog_description: thoughts gathered, chaos tamed
+blog_description:
 permalink: /blog/:year/:title/
 lsi: false
 
@@ -194,7 +194,7 @@ jekyll-archives:
       tags: "/blog/:type/:name/"
       categories: "/blog/:type/:name/"
 
-display_tags: ["Distributed Systems", "Large Language Models", "Microservice Patterns"]
+display_tags: ["Distributed Systems", "Large Language Models"]
 display_categories: []
 
 # -----------------------------------------------------------------------------
