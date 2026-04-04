@@ -11,7 +11,7 @@ tags:
 giscus_comments: false
 ---
 
-I rebuilt a GPT-2 BPE tokenizer from scratch in Go — offline encoding, streaming support, and three rounds of optimization. This post covers what I built, what broke, and what the benchmarks revealed.
+I rebuilt a GPT-2 BPE tokenizer from scratch in Go -- offline encoding, streaming support, and three rounds of optimization. This post covers what I built, what broke, and what the benchmarks revealed.
 
 ## The BPE Tokenizer
 A tokenizer is the first step in almost every modern language model pipeline. Its job is simple in spirit but critical in practice: convert raw text into a sequence of integer IDs that a model can process. For example: `"Hello world!"` can be encoded as `[15496, 995, 0]`.
@@ -56,7 +56,7 @@ But it has a downside: tokenization is not just a lookup, it’s an algorithm. A
 ## Why Rebuild a Tokenizer at all?
 If one's interested in **LLM infrastructure**, tokenizers are not optional. Most production tokenizers are treated as black boxes but that abstraction leaks quickly once we start caring about end-to-end latency, memory patterns, and streaming inputs.
 
-I wanted to understand what was actually happening inside. So I rebuilt it in Go — byte-pair encoding, vocab parsing, merges, greedy selection, token mapping, streaming semantics, all of it.
+I wanted to understand what was actually happening inside. So I rebuilt it in Go -- byte-pair encoding, vocab parsing, merges, greedy selection, token mapping, streaming semantics, all of it.
 
 ## The Goal
 
@@ -64,7 +64,7 @@ The goal was a streaming-friendly GPT-2 tokenizer in Go with exact round-trip pa
 
 ## The Underestimate: BPE is simple, right?
 
-BPE looks simple on the surface — load vocab, greedily merge pairs, done — but the actual implementation involves:
+BPE looks simple on the surface -- load vocab, greedily merge pairs, done -- but the actual implementation involves:
 
 - priority queues
 - adjacency maintenance
@@ -371,6 +371,6 @@ Overall, compared to the baseline:
 - ~31 MB less memory allocated per encode
 - ~1,300 fewer allocations per encode
 
-Most of the remaining difficulty lived outside the algorithm itself — how often certain paths execute, where allocations sneak in, and how small, reasonable choices compound in a hot loop.
+Most of the remaining difficulty lived outside the algorithm itself -- how often certain paths execute, where allocations sneak in, and how small, reasonable choices compound in a hot loop.
 
 Over the next few posts, I’ll zoom out from tokenization and look at KV caches and inference-time optimizations, and how those systems interact with tokenization in practice.
