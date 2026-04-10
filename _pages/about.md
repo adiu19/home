@@ -22,4 +22,4 @@ latest_posts:
   limit: 5
 ---
 
-I write about distributed systems, LLM infrastructure, and software engineering.
+Writing about systems internals -- the technical and the social.
