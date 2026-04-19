@@ -14,9 +14,7 @@ giscus_comments: false
 I rebuilt a GPT-2 BPE tokenizer from scratch in Go -- offline encoding, streaming support, and three rounds of optimization. This post covers what I built, what broke, and what the benchmarks revealed.
 
 ## The BPE Tokenizer
-A tokenizer is the first step in almost every modern language model pipeline. Its job is simple in spirit but critical in practice: convert raw text into a sequence of integer IDs that a model can process. For example: `"Hello world!"` can be encoded as `[15496, 995, 0]`.
-
-These integers correspond to entries in a fixed vocabulary learned during model training.
+A tokenizer is the first step in almost every modern language model pipeline. Its job is simple in spirit but critical in practice: convert raw text into a sequence of integer IDs that a model can process. For example: `"Hello world!"` can be encoded as `[15496, 995, 0]`. These integers correspond to entries in a fixed vocabulary learned during model training.
 
 Every request to a large language model whether for inference or training, goes through a tokenizer first. That makes tokenization part of the critical path for latency-sensitive systems like:
 - inference servers
@@ -24,9 +22,7 @@ Every request to a large language model whether for inference or training, goes 
 - streaming generation APIs
 - real-time classification systems
 
-If tokenization is slow, everything downstream is slow.
-
-Most modern LLMs (GPT-2, GPT-3, GPT-4 class models) use Byte Pair Encoding (BPE) or close variants.
+so tokenization being slow means everything downstream is too. Most modern LLMs (GPT-2, GPT-3, GPT-4 class models) use Byte Pair Encoding (BPE) or close variants.
 
 At a high level, BPE works like this:
 1. Start with raw text as bytes (values 0–255)
@@ -39,12 +35,7 @@ The result is a vocabulary of:
 - short character sequences
 - common substrings (e.g. "ing", "tion", "http")
 
-BPE is attractive because it:
-- handles arbitrary UTF-8 text
-- balances vocabulary size vs. expressiveness
-- compresses common patterns efficiently
-
-But it has a downside: tokenization is not just a lookup, it’s an algorithm. At runtime, a BPE tokenizer must repeatedly:
+BPE handles arbitrary UTF-8 text, balances vocabulary size vs expressiveness, and compresses common patterns efficiently, but it has a downside: tokenization is not just a lookup, it’s an algorithm. At runtime, a BPE tokenizer must repeatedly:
 1. scan adjacent token pairs
 2. check whether (a, b) is mergeable
 3. compare merge ranks
@@ -54,7 +45,7 @@ But it has a downside: tokenization is not just a lookup, it’s an algorithm. A
 
 
 ## Why Rebuild a Tokenizer at all?
-If one's interested in **LLM infrastructure**, tokenizers are not optional. Most production tokenizers are treated as black boxes but that abstraction leaks quickly once we start caring about end-to-end latency, memory patterns, and streaming inputs.
+If one's interested in **LLM infrastructure**, tokenizers are part of the critical path. Most production tokenizers are treated as black boxes but that abstraction leaks quickly once we start caring about end-to-end latency, memory patterns, and streaming inputs.
 
 I wanted to understand what was actually happening inside. So I rebuilt it in Go -- byte-pair encoding, vocab parsing, merges, greedy selection, token mapping, streaming semantics, all of it.
 
@@ -81,8 +72,6 @@ The offline greedy BPE encoder came first. It matched Hugging Face's output, pas
 
 ## The Streaming Encoder
 
-Streaming is not "offline but in chunks".
-
 Streaming requires:
 
 - maintaining adjacency across chunk boundaries
@@ -93,26 +82,24 @@ Streaming requires:
 - dynamically adjusting a tail-reserve so merges don’t cross uncommitted boundaries
 - rewriting heap candidates without invalidating active merges
     
-This part of the project consumed _weeks_. I rewrote large sections and repeatedly reached states where invariants failed in unpredictable ways.
-
-I hit issues like:
+I ran into issues like:
 - stale heap candidates creating illegal merges
 - cross-boundary merges misfiring
 - node liveness drifting out of sync
 - adjacency pointers failing in ways I wasn't aware of
 
-Fully incremental streaming BPE is elegant, but the complexity was outpacing the benefit. I dropped it and focused on optimizing the naive streaming encoder instead.
+I dropped the incremental approach since the complexity was outpacing the benefit, and focused on optimizing the naive streaming encoder instead.
 
 ## The Optimization Journey
 
-With the incremental encoder shelved, I could treat tokenization as an optimization problem instead of a correctness war.
+With the incremental encoder shelved, I could focus on optimization instead of chasing invariant violations.
 
 The naive streaming encoder is simple:
 - break input into chunks
 - run offline BPE on each chunk
 - concatenate results
 
-No cross-boundary merging but extremely practical. And most importantly, much easier to optimize.
+No cross-boundary merging, but extremely practical and much easier to optimize.
 
 ### A short detour on the benchmarking setup
 
@@ -142,7 +129,7 @@ In the flamegraph above, EncodeOffline dominates CPU time, but the real culprits
 - Push/Pop for BucketQueue: responsible for ~35–45% of CPU time and millions of tiny allocations.
 - mapaccess (pair-rank lookups): another ~20–25%.
 
-Very little time is spent doing "useful compute" versus runtime overhead: hash-map lookups and allocation-heavy queue maintenance dominate the merge loop.
+Hash-map lookups and allocation-heavy queue maintenance dominate the merge loop, leaving very little time for the actual merge work.
 
 Here’s the memory flamegraph from the baseline naive streaming encoder (4 KB chunks, single-core).
 
@@ -154,14 +141,12 @@ Here’s the memory flamegraph from the baseline naive streaming encoder (4 KB c
 - So the queue allocates tens of thousands of small slices / structs
 - This results in millions of small allocations
 
-At this point, I realized that BucketQueue is extremely memory-unfriendly and behaves catastrophically in Go’s allocator model.
-
-Even if we ignore the allocations from constructing the queue (which we shouldn't given the sheer volume), every push to the queue incurs:
+At this point, I realized that BucketQueue is a poor fit for Go’s allocator model. Even if we ignore the allocations from constructing the queue (which we shouldn't given the sheer volume), every push to the queue incurs:
 - A fresh struct
 - Repeated pointer chasing
 - Occasional slice growth in specific buckets
 
-Together these account for another 10% of total memory. The problem isn't BPE, it's the data structure.
+Together these account for another 10% of total memory. The problem isn't BPE; it's the data structure.
 
 ### Optimization #1: FastLookup
 
@@ -267,7 +252,7 @@ The Delta:
 
 The CPU flamegraph shows a small reduction in runtime overhead associated with slice preparation and memory clearing.
 
-This particular optimization doesn’t move the needle nearly as much as eliminating hash-map lookups, but it removes unnecessary work from a performance-critical path at essentially zero cost in complexity.
+This particular optimization doesn’t move the needle nearly as much as eliminating hash-map lookups, but it removes unnecessary work from the hot path for essentially no added complexity.
 
 ### Optimization #3: Reusing the Output Buffer and Eliminating the Final Copy
 
@@ -371,6 +356,6 @@ Overall, compared to the baseline:
 - ~31 MB less memory allocated per encode
 - ~1,300 fewer allocations per encode
 
-Most of the remaining difficulty lived outside the algorithm itself -- how often certain paths execute, where allocations sneak in, and how small, reasonable choices compound in a hot loop.
+Most of the remaining difficulty lived outside the algorithm itself -- how often certain paths execute and where allocations sneak in.
 
 Over the next few posts, I’ll zoom out from tokenization and look at KV caches and inference-time optimizations, and how those systems interact with tokenization in practice.
