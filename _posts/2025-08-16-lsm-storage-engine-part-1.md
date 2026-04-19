@@ -153,10 +153,8 @@ On restart, the LSM needs to know which SSTables exist, their key ranges, and th
 Instead, we maintain a manifest file. Each flush appends one line:
 
 ```
-sstable_000001.dat,seq=1,size=4096,minKey=<base62>,maxKey=<base62>
+sstable_000001.dat,seq=1,size=4096,minKey=abc,maxKey=xyz
 ```
-
-Keys are base62-encoded in the manifest because raw keys can contain commas, newlines, or any byte. Storing them directly in a text format would break parsing.
 
 On startup, we read one file, parse the entries, and derive `nextSeq` from the last entry's sequence number + 1. No `nextSeq` header needed since it's derivable from the data. This makes flush a pure append to the manifest: no read-before-write, no rewrite.
 
