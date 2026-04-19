@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Building an LSM Storage Engine from Scratch in Go, Part 1"
-date: 2025-11-15
+date: 2025-08-16
 description: "Writing a log-structured merge-tree storage engine from first principles in Go: skiplists, binary SSTables, and the flush path."
 categories:
   - Storage Engines
@@ -12,7 +12,7 @@ tags:
 giscus_comments: false
 ---
 
-We built an LSM-tree storage engine from scratch in Go. No external dependencies, no embedded databases. Raw file I/O and binary formats. This post covers Part 1: the core data structures and the write path from memory to disk.
+We built an LSM-tree storage engine from scratch in Go. No external dependencies, only raw file I/O and binary formats. This post covers Part 1: the core data structures and the write path from memory to disk.
 
 ## Why Build a Storage Engine?
 
@@ -26,12 +26,12 @@ The engine targets 10K write QPS with bounded read latency.
 
 An LSM-tree (Log-Structured Merge-tree) is a write-optimized data structure. The core idea:
 
-1. **Write to memory first.** An in-memory sorted structure (the *memtable*) absorbs all writes. Fast, no disk I/O.
-2. **Flush to disk periodically.** When the memtable gets large enough, write it out as a sorted, immutable file (an *SSTable*). One sequential write, one fsync.
-3. **Read by checking layers.** Check the memtable first, then SSTables on disk (newest first). First match wins.
+1. **Write to memory first.** An in-memory sorted structure (the *memtable*) absorbs all writes (no disk I/O).
+2. **Flush to disk periodically.** When the memtable gets large enough, write it out as a sorted, immutable file (an *SSTable*).
+3. **Read by checking layers.** Check the memtable first, then SSTables on disk newest first (first match wins).
 4. **Compact in the background.** Merge SSTables over time to reclaim space and reduce read amplification.
 
-Writes are always sequential (append to memory, flush sorted blocks). Reads fan out across layers. This tradeoff (fast writes, slightly more expensive reads) is why LSMs dominate write-heavy workloads — RocksDB and Cassandra both use variants of this.
+Writes are always sequential (append to memory, flush sorted blocks). Reads fan out across layers. This tradeoff (fast writes, slightly more expensive reads) is why LSMs are popular for write-heavy workloads (RocksDB and Cassandra both use variants of this).
 
 ## The Memtable: A Skiplist
 
@@ -69,15 +69,13 @@ A few design choices:
 
 - **`RWMutex`, not per-node locks.** A `Get` traversing forward pointers while an `Insert` modifies them mid-splice can follow a nil or stale pointer. Reads need at minimum an RLock. We went with a single RWMutex over the whole skiplist. Simpler, and the critical section is short (pointer updates only).
 - **`SizeInBytes` tracking.** Every insert adds `1 + len(key) + len(value)` to the counter. Overwrites adjust by `len(newValue) - len(oldValue)`. This drives the auto-flush decision without scanning the skiplist.
-- **Overwrite semantics.** Inserting a duplicate key overwrites the value in place. No "key exists" error. LSM semantics are last-write-wins.
+- **Overwrite semantics.** Inserting a duplicate key overwrites the value in place. LSM semantics are last-write-wins.
 
 ## The Tombstone Problem
 
 How do we delete a key from an append-only system? We can't go back and remove it from an SSTable on disk. SSTables are immutable.
 
 The answer is a *tombstone*: a marker that says "this key is deleted." A delete is really an insert with the tombstone byte set to `1`. When the read path encounters a tombstone, it stops searching.
-
-A tombstone means stop searching. "Not found" means keep checking older SSTables.
 
 ## The SSTable: A Binary File Format
 
@@ -98,6 +96,7 @@ Why these sizes?
 - **1 byte tombstone.** Could pack into a single bit of `key_len`, but byte-aligned fields are simpler to debug. The 7 unused bits are available for future metadata flags.
 - **1 byte key_len (max 255 bytes).** Our keys are 10-40 bytes, so 255 should be more than enough. Saves 1 byte per entry vs uint16.
 - **2 byte val_len (max ~64KB, big-endian).** Values can be several KB. 64KB headroom is sufficient.
+
 The overhead is 4 bytes per entry.
 
 ## The Flush Path
@@ -130,7 +129,7 @@ The immutable memtable exists for the read path. During flush, a `Get` might loo
 
 The memtable swap uses `atomic.Pointer[SkipList]`. This guarantees the pointer replacement is a single indivisible operation. No goroutine ever sees a half-written pointer. But it does *not* make the sequence `Load() + Store()` atomic.
 
-In practice, a few writes might land in the old skiplist during the swap window. They end up duplicated (in the WAL and the SSTable) but correct. Last-write-wins semantics handle it.
+In practice, a few writes might land in the old skiplist during the swap window. They end up duplicated in the flushed SSTable but correct. Last-write-wins semantics handle it.
 
 ### Auto-Flush
 
@@ -161,7 +160,7 @@ sstable_000001.dat,seq=1,size=4096,minKey=<base62>,maxKey=<base62>
 
 Keys are base62-encoded in the manifest because raw keys can contain commas, newlines, or any byte. Storing them directly in a text format would break parsing.
 
-On startup, we read one file, parse the entries, and derive `nextSeq` from the last entry's sequence number + 1. No `nextSeq` header needed. It's derivable from the data. This makes flush a pure append to the manifest: no read-before-write, no rewrite.
+On startup, we read one file, parse the entries, and derive `nextSeq` from the last entry's sequence number + 1. No `nextSeq` header needed since it's derivable from the data. This makes flush a pure append to the manifest: no read-before-write, no rewrite.
 
 ## The Read Path
 
@@ -178,10 +177,6 @@ For SSTables, we filter before scanning:
 
 This works but has a clear bottleneck: a point read for a missing key scans every SSTable. Part 2 addresses this with bloom filters.
 
-## What's Missing
+[Code is on GitHub.](https://github.com/adiu19/chorus/tree/main/storage)
 
-What's missing: bloom filters (Part 2), WAL for crash recovery (Part 3), and compaction (Part 4). The engine currently loses unflushed data on crash and accumulates SSTables without bound.
-
-[Code is on GitHub.](https://github.com)
-
-*Part 2 covers bloom filters, the double hashing trick, and bit-level addressing. We cut unnecessary disk I/O from the read path.*
+*Part 2 covers the WAL, crash recovery, group commit, and bloom filters. We make writes durable and reads efficient.*
