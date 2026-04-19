@@ -144,7 +144,7 @@ func (bf *BloomFilter) Exists(key []byte) bool {
 }
 ```
 
-Deleted keys must also be captured in the bloom filter. If a tombstoned key is absent from the filter, the read path skips the SSTable containing the tombstone, falls through to an older SSTable containing the original value, and returns it. The key silently resurrects.
+Deleted keys must also be captured in the bloom filter. If a tombstoned key is absent from the filter, the read path skips the SSTable containing the tombstone, falls through to an older SSTable containing the original value, and returns the deleted key as if it still exists.
 
 ### Read Path Order
 

@@ -18,9 +18,7 @@ We built an LSM-tree storage engine from scratch in Go. No external dependencies
 
 Any system that needs to persist key-value data and read it back efficiently needs a storage engine.
 
-We wanted to understand what actually happens when bytes move from a function call to physical disk. What guarantees does fsync give? What happens on crash? Building from scratch was the fastest way to answer these questions.
-
-The engine targets 10K write QPS with bounded read latency.
+We wanted to understand what actually happens when bytes move from a function call to physical disk. What guarantees does fsync give? What happens on crash? Building from scratch was the fastest way to answer these questions, targeting 10K write QPS with bounded read latency.
 
 ## The LSM-Tree in 30 Seconds
 
