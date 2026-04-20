@@ -59,7 +59,7 @@ google_analytics:
 
 blog_name: Clustered Thoughts
 blog_description:
-permalink: /blog/:year/:title/
+permalink: /blog/:title/
 lsi: false
 
 pagination:
@@ -142,7 +142,6 @@ plugins:
   - jekyll-archives-v2
   - jekyll-cache-bust
   - jekyll-email-protect
-  - jekyll-feed
   - jekyll-get-json
   - jekyll-imagemagick
   - jekyll-link-attributes
@@ -188,9 +187,8 @@ terser:
 
 jekyll-archives:
   posts:
-    enabled: [year, tags, categories]
+    enabled: [tags, categories]
     permalinks:
-      year: "/blog/:year/"
       tags: "/blog/:type/:name/"
       categories: "/blog/:type/:name/"
 
