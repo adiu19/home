@@ -29,7 +29,7 @@ _styles: >
     <p class="interest-note">Taking lessons. The ball is starting to cooperate.</p>
   </div>
   <div class="interest-item">
-    <div class="interest-label">Football <span style="font-weight:400;color:var(--global-text-color-light)">(not soccer)</span></div>
+    <div class="interest-label">Football <span style="font-weight:400;color:var(--global-text-color-light)">(the real one)</span></div>
     <p class="interest-note">Manchester United. A lifelong exercise in lowered expectations.</p>
   </div>
   <div class="interest-item">
