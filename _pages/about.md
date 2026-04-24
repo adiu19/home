@@ -1,25 +1,6 @@
 ---
-layout: about
+layout: terminal
 title: about
 permalink: /
 subtitle: Mountain View, CA
-
-profile:
-  align: right
-  image:
-  image_circular: false
-  more_info:
-
-selected_papers: false
-social: true
-
-announcements:
-  enabled: false
-
-latest_posts:
-  enabled: true
-  scrollable: true
-  limit: 5
 ---
-
-Writing about systems internals -- the technical and the social.

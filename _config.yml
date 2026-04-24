@@ -7,8 +7,7 @@ first_name: Aditya
 middle_name:
 last_name: Upadhyaya
 email:
-description: >
-  Clustered Thoughts - a blog about distributed systems, LLMs, and software engineering.
+description: Writing about distributed systems, LLMs, and software engineering.
 footer_text:
 keywords: distributed-systems, llm, software-engineering, go
 lang: en
