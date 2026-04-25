@@ -11,7 +11,7 @@ tags:
 giscus_comments: false
 ---
 
-I rebuilt a GPT-2 BPE tokenizer from scratch in Go -- offline encoding, streaming support, and three rounds of optimization. This post covers what I built, what broke, and what the benchmarks revealed.
+I rebuilt a GPT-2 BPE tokenizer from scratch in Go, with offline encoding, streaming support, and three rounds of optimization. This post covers what I built, what broke, and what the benchmarks revealed.
 
 ## The BPE Tokenizer
 A tokenizer is the first step in almost every modern language model pipeline. Its job is simple in spirit but critical in practice: convert raw text into a sequence of integer IDs that a model can process. For example: `"Hello world!"` can be encoded as `[15496, 995, 0]`. These integers correspond to entries in a fixed vocabulary learned during model training.
@@ -47,15 +47,15 @@ BPE handles arbitrary UTF-8 text, balances vocabulary size vs expressiveness, an
 ## Why Rebuild a Tokenizer at all?
 If one's interested in **LLM infrastructure**, tokenizers are part of the critical path. Most production tokenizers are treated as black boxes but that abstraction leaks quickly once we start caring about end-to-end latency, memory patterns, and streaming inputs.
 
-I wanted to understand what was actually happening inside. So I rebuilt it in Go -- byte-pair encoding, vocab parsing, merges, greedy selection, token mapping, streaming semantics, all of it.
+I wanted to understand what was actually happening inside. So I rebuilt it in Go (byte-pair encoding, vocab parsing, merges, greedy selection, token mapping, streaming semantics, all of it).
 
 ## The Goal
 
 The goal was a streaming-friendly GPT-2 tokenizer in Go with exact round-trip parity, minimal allocations, no unnecessary copies, and proper benchmarks.
 
-## The Underestimate: BPE is simple, right?
+## BPE in Practice
 
-BPE looks simple on the surface -- load vocab, greedily merge pairs, done -- but the actual implementation involves:
+BPE looks simple on the surface (load vocab, greedily merge pairs) but the actual implementation involves:
 
 - priority queues
 - adjacency maintenance
@@ -64,11 +64,11 @@ BPE looks simple on the surface -- load vocab, greedily merge pairs, done -- but
 - dealing with arbitrary Unicode byte sequences
 - ensuring determinism
 - avoiding pathological quadratic behavior
-- and in streaming mode, dealing with **chunk boundaries**, which are an entire horror movie of their own
+- and in streaming mode, dealing with **chunk boundaries**
 
 ## The First Win: Offline Encoder Working
 
-The offline greedy BPE encoder came first. It matched Hugging Face's output, passed all round-trip tests, and handled odd unicode and edge cases correctly. With that working, the next step was streaming.
+The offline greedy BPE encoder came first. It matched Hugging Face's output, passed all round-trip tests, and handled odd unicode and edge cases correctly, so the next step was streaming.
 
 ## The Streaming Encoder
 
@@ -86,13 +86,11 @@ I ran into issues like:
 - stale heap candidates creating illegal merges
 - cross-boundary merges misfiring
 - node liveness drifting out of sync
-- adjacency pointers failing in ways I wasn't aware of
+- adjacency pointers failing
 
 I dropped the incremental approach since the complexity was outpacing the benefit, and focused on optimizing the naive streaming encoder instead.
 
 ## The Optimization Journey
-
-With the incremental encoder shelved, I could focus on optimization instead of chasing invariant violations.
 
 The naive streaming encoder is simple:
 - break input into chunks
@@ -355,7 +353,5 @@ Overall, compared to the baseline:
 - ~44% higher throughput
 - ~31 MB less memory allocated per encode
 - ~1,300 fewer allocations per encode
-
-Most of the remaining difficulty lived outside the algorithm itself -- how often certain paths execute and where allocations sneak in.
 
 Over the next few posts, I’ll zoom out from tokenization and look at KV caches and inference-time optimizations, and how those systems interact with tokenization in practice.
