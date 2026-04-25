@@ -43,7 +43,7 @@ BPE handles arbitrary UTF-8 text, balances vocabulary size vs expressiveness, an
 
 ## The Goal
 
-Tokenizers sit at the entry point of every inference request. Most production tokenizers are treated as black boxes, but that abstraction leaks quickly once you start caring about end-to-end latency, memory patterns, and streaming inputs.
+Tokenizers sit at the entry point of every inference request. Most production tokenizers are treated as black boxes, but that abstraction leaks quickly once we start caring about end-to-end latency, memory patterns, and streaming inputs.
 
 I wanted to understand what was actually happening inside. The goal was a streaming-friendly GPT-2 tokenizer in Go: exact round-trip parity, minimal allocations, no unnecessary copies.
 
