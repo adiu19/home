@@ -11,9 +11,6 @@ tags:
 giscus_comments: false
 ---
 
-I rebuilt a GPT-2 BPE tokenizer from scratch in Go, with offline encoding, streaming support, and three rounds of optimization. This post covers what I built, what broke, and what the benchmarks revealed.
-
-## The BPE Tokenizer
 A tokenizer is the first step in almost every modern language model pipeline. Its job is simple in spirit but critical in practice: convert raw text into a sequence of integer IDs that a model can process. For example: `"Hello world!"` can be encoded as `[15496, 995, 0]`. These integers correspond to entries in a fixed vocabulary learned during model training.
 
 Every request to a large language model whether for inference or training, goes through a tokenizer first. That makes tokenization part of the critical path for latency-sensitive systems like:
