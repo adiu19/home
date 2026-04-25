@@ -589,7 +589,7 @@ With a reasonable measurement harness, we can finally answer: how much load can 
 })();
 </script>
 
-p99 stays under 20ms up to about 30K writes per second, clearing the Part 1 target by roughly 3x (caveat: no replication in the loop; adding that is future work). Past that, the latency climbs into hundreds of milliseconds, and by 90K even p50 is past 100ms. This is where the open-loop methodology earns its keep: the channel saturates, tokens accumulate real wait time, and the numbers reflect the full pain a caller would feel.
+p99 stays under 20ms up to about 30K writes per second, clearing the Part 1 target by roughly 3x (caveat: no replication in the loop; adding that is future work). That 30K/s is also the goodput ceiling: the engine accepts more requests past that point, it just cannot honor the latency budget for them. Past 30K/s, latency climbs into hundreds of milliseconds, and by 90K even p50 is past 100ms. This is where the open-loop methodology earns its keep: the channel saturates, tokens accumulate real wait time, and the numbers reflect the full pain a caller would feel.
 
 ## Wrapping Up
 
