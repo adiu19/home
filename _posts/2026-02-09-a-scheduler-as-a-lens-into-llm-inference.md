@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "A Scheduler as a Lens into LLM Inference"
-date: 2026-04-28
+date: 2026-02-09
 description: "Building a job scheduler in Go and using it as a lens into LLM inference scheduling — tracing every design decision back to its vLLM parallel."
 categories:
   - LLM Infrastructure

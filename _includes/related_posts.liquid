@@ -1,5 +1,17 @@
+{% assign related = "" | split: "" %}
+{% for post in site.posts %}
+  {% unless post.id == page.id %}
+    {% for tag in post.tags %}
+      {% if page.tags contains tag %}
+        {% assign related = related | push: post %}
+        {% break %}
+      {% endif %}
+    {% endfor %}
+  {% endunless %}
+{% endfor %}
+
 {% assign have_related_posts = false %}
-{% for post in site.related_posts | limit: site.related_blog_posts.max_related %}
+{% for post in related limit: site.related_blog_posts.max_related %}
   {% unless have_related_posts %}
     {% assign have_related_posts = true %}
     {% if page.layout == 'post' %}
