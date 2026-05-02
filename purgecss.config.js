@@ -3,4 +3,12 @@ module.exports = {
   css: ["_site/assets/css/*.css"],
   output: "_site/assets/css/",
   skippedContentGlobs: ["_site/assets/**/*.html"],
+  safelist: [
+    "pagination",
+    "pagination-lg",
+    "page-item",
+    "page-link",
+    "active",
+    "disabled",
+  ],
 };
