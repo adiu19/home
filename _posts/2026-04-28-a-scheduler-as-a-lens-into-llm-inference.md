@@ -127,7 +127,7 @@ go func() {
 }()
 ```
 
-> **vLLM parallel:** The GPU worker sends outputs back to EngineCore over shared memory. EngineCore reads those outputs within the same step before the next scheduling decision and decides what to do. Same pattern: the decision-maker is isolated, the workers produce signals.
+> **vLLM parallel:** The GPU worker sends outputs back to EngineCore over shared memory. EngineCore reads those outputs within the same step before the next scheduling decision and decides what to do. (isolated decision-maker with the workers producing signals).
 
 ## Closing thoughts
 
