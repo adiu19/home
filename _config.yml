@@ -272,7 +272,8 @@ enable_google_analytics: false
 enable_cronitor_analytics: false
 enable_pirsch_analytics: false
 enable_openpanel_analytics: false
-enable_google_verification: false
+enable_google_verification: true
+google_site_verification: GbEr0JpRxII1CF7Lueor6vSh388ZFHy9zfIl0hZ6nqU
 enable_bing_verification: false
 enable_cookie_consent: false
 enable_masonry: true
