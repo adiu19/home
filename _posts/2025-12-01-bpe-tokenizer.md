@@ -11,15 +11,9 @@ tags:
 giscus_comments: false
 ---
 
-A tokenizer is the first step in almost every modern language model pipeline. Its job is simple in spirit but critical in practice: convert raw text into a sequence of integer IDs that a model can process. For example: `"Hello world!"` can be encoded as `[15496, 995, 0]`. These integers correspond to entries in a fixed vocabulary learned during model training.
+A tokenizer is the first step in almost every modern language model pipeline. Its job is simple to state: convert raw text into a sequence of integer IDs that a model can process. For example: `"Hello world!"` can be encoded as `[15496, 995, 0]`. These integers correspond to entries in a fixed vocabulary learned during model training.
 
-Every request to a large language model whether for inference or training, goes through a tokenizer first. That makes tokenization part of the critical path for latency-sensitive systems like:
-- inference servers
-- chat applications
-- streaming generation APIs
-- real-time classification systems
-
-so tokenization being slow means everything downstream is too. Most modern LLMs (GPT-2, GPT-3, GPT-4 class models) use Byte Pair Encoding (BPE) or close variants.
+Every request to a large language model whether for inference or training, goes through a tokenizer first. That makes tokenization part of the critical path for latency-sensitive systems like inference servers, so tokenization being slow means everything downstream is too. Most modern LLMs (GPT-2, GPT-3, GPT-4 class models) use Byte Pair Encoding (BPE) or close variants.
 
 At a high level, BPE works like this:
 1. Start with raw text as bytes (values 0–255)
@@ -32,33 +26,29 @@ The result is a vocabulary of:
 - short character sequences
 - common substrings (e.g. "ing", "tion", "http")
 
-BPE handles arbitrary UTF-8 text, balances vocabulary size vs expressiveness, and compresses common patterns efficiently, but it has a downside: tokenization is not just a lookup, it’s an algorithm. At runtime, a BPE tokenizer must repeatedly:
+BPE handles arbitrary UTF-8 text and keeps the vocabulary compact. The catch is at runtime: encoding a chunk means running the merge loop rather than reading from a table. For each chunk, the tokenizer repeatedly:
 1. scan adjacent token pairs
 2. check whether (a, b) is mergeable
 3. compare merge ranks
 4. apply the best merge
-5. update neighboring pairs and all of this usually involves thousands of pair lookups per chunk of text.
+5. update neighboring pairs
 
-
+All of this usually runs to thousands of pair lookups per chunk of text.
 
 ## The Goal
 
-Tokenizers sit at the entry point of every inference request. Most production tokenizers are treated as black boxes, but that abstraction leaks quickly once we start caring about end-to-end latency, memory patterns, and streaming inputs.
+Most production tokenizers are treated as black boxes, but that abstraction leaks quickly once we start caring about end-to-end latency and memory patterns.
 
 I wanted to understand what was actually happening inside. The goal was a streaming-friendly GPT-2 tokenizer in Go: exact round-trip parity, minimal allocations, no unnecessary copies.
 
 ## BPE in Practice
 
-BPE looks simple on the surface (load vocab, greedily merge pairs) but the actual implementation involves:
+BPE looks simple on the surface (load vocab, greedily merge pairs), but a real implementation has to handle:
 
-- priority queues
-- adjacency maintenance
-- invalidation semantics
-- versioning to prevent stale merges
-- dealing with arbitrary Unicode byte sequences
-- ensuring determinism
-- avoiding pathological quadratic behavior
-- and in streaming mode, dealing with **chunk boundaries**
+- a priority queue of merge candidates
+- keeping adjacency state consistent as merges fire
+- arbitrary Unicode byte sequences
+- chunk boundaries in streaming mode
 
 ## The First Win: Offline Encoder Working
 
@@ -66,21 +56,9 @@ The offline greedy BPE encoder came first. It matched Hugging Face's output, pas
 
 ## The Streaming Encoder
 
-Streaming requires:
+Streaming requires maintaining adjacency across chunk boundaries, scheduling merges correctly even when pieces arrive out of order, and rewriting heap candidates without invalidating active merges.
 
-- maintaining adjacency across chunk boundaries
-- scheduling merges correctly even when pieces arrive out of order
-- maintaining liveness invariants
-- tracking live version numbers
-- updating linked lists of token nodes
-- dynamically adjusting a tail-reserve so merges don’t cross uncommitted boundaries
-- rewriting heap candidates without invalidating active merges
-    
-I ran into issues like:
-- stale heap candidates creating illegal merges
-- cross-boundary merges misfiring
-- node liveness drifting out of sync
-- adjacency pointers failing
+In practice that meant fighting stale heap candidates that created illegal merges, cross-boundary merges misfiring, and adjacency pointers drifting out of sync.
 
 I dropped the incremental approach since the complexity was outpacing the benefit, and focused on optimizing the naive streaming encoder instead.
 
@@ -91,7 +69,7 @@ The naive streaming encoder is simple:
 - run offline BPE on each chunk
 - concatenate results
 
-No cross-boundary merging, but extremely practical and much easier to optimize.
+It does no cross-boundary merging, but it's practical and much easier to optimize.
 
 ### A short detour on the benchmarking setup
 
@@ -138,7 +116,7 @@ At this point, I realized that BucketQueue is a poor fit for Go’s allocator mo
 - Repeated pointer chasing
 - Occasional slice growth in specific buckets
 
-Together these account for another 10% of total memory. The problem isn't BPE; it's the data structure.
+Together these account for another 10% of total memory, almost all of it from the queue rather than from BPE.
 
 ### Optimization #1: FastLookup
 
@@ -159,7 +137,7 @@ if a < N && b < N {
 return fallbackMap[key]
 ```
 
-The fast lookup table is sized (N, N). Increasing N increases the hit rate of the fast path and reduces fallback map lookups and in fact, larger values did produce additional speedups in experiments. However, for the purposes of this post, the goal is not to find a globally optimal cutoff, but to demonstrate an optimization pattern: replacing hash-based lookups in the hot loop with bounded, direct memory access. N = 2048 strikes a reasonable balance for illustrating the idea without introducing excessive memory overhead.
+The fast lookup table is sized (N, N). Increasing N increases the hit rate of the fast path and reduces fallback map lookups and in fact, larger values did produce additional speedups in experiments. The point here is the pattern itself: replacing hash-based lookups in the hot loop with bounded, direct memory access. N = 2048 strikes a reasonable balance for illustrating the idea without introducing excessive memory overhead.
 
 Here’s the CPU flamegraph after the first optimization of the naive streaming encoder (4 KB chunks, single-core).
 
@@ -293,8 +271,6 @@ out := make([]int, len(st.outBuf))
 copy(out, st.outBuf)
 return out
 ```
-
-When `OptNoCopyReturn` is enabled, we skip the copy entirely and return a slice header that points directly into the reusable buffer.
 
 For streaming workloads where the consumer immediately processes the tokens, this is perfectly safe and much faster.
 
