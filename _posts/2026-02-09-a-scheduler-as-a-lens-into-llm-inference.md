@@ -14,15 +14,15 @@ tags:
 giscus_comments: false
 ---
 
-At its core, a scheduler answers one question: given limited resources and competing demand, what runs next? That question shows up everywhere, and LLM inference is no exception. GPUs are expensive, requests arrive concurrently with different priorities and unpredictable output lengths (the cost of serving a request grows as it runs). That last part is what makes LLM scheduling a genuinely complex problem to solve.
+A scheduler decides what runs next when there isn't enough capacity to run everything at once. LLM inference is a sharp version of that problem: GPUs are expensive, requests arrive concurrently with different priorities, and output lengths are unknown up front, so the cost of serving a request keeps growing as it runs. That last property is what makes the scheduling hard.
 
-I've been tinkering with vLLM (the reference implementation for high-throughput LLM inference) recently and the scheduler was something that stood out. What better way to use this opportunity than to build a prototype from scratch and draw parallels with what exists in vLLM? While the scheduler I built is by no means an exact clone of what exists in vLLM, I personally feel it has done a pretty tidy job at helping me onboard to vLLM.
+I've been digging into vLLM (the reference implementation for high-throughput LLM inference) lately, and the scheduler is the part that stood out. So I built a small one from scratch in Go and traced each design decision back to its vLLM equivalent. Mine is nowhere near a clone, but writing it taught me more about vLLM's scheduler than reading it did.
 
-Worth noting that vLLM schedules at two layers: at the client level, a load balancer routes incoming requests across multiple *EngineCore* processes (the number of which is determined by the data parallelism configuration), and inside each *EngineCore*, a scheduler handles admission and KV cache management. The parallels in this post are with the latter.
+vLLM schedules at two layers. At the client level, a load balancer routes incoming requests across multiple *EngineCore* processes (how many is set by the data parallelism configuration). Inside each *EngineCore*, a scheduler handles admission and KV cache management. The parallels in this post are all with the latter.
 
 ## The tick loop
 
-LLM inference is autoregressive — each request generates one token per decode step, and output lengths are unknown until a stop condition is hit. We need a loop that continuously reassesses: what finished, what capacity freed up, what runs next.
+LLM inference is autoregressive: each request generates one token per decode step, and output lengths are unknown until a stop condition is hit. We need a loop that continuously reassesses: what finished, what capacity freed up, what runs next.
 
 Schedulers can be initiated in two ways: on a fixed-interval timer (tick-based) or on events like a request arrival or a job completion (event-driven). I'm going to focus on a tick-based scheduler where each tick acquires a single lock, runs three phases in order, and releases the lock. Worker goroutines run concurrently but never touch scheduler state directly. They signal completion by sending a job ID onto a channel.
 
@@ -53,8 +53,6 @@ The channel acts as the mailbox and the tick acts as the processing loop. Inside
 
 ## Three phases: drain, reclaim, admit
 
-Each tick runs three phases in strict order.
-
 **Drain** reads the completions channel. It snapshots the channel length at the start and reads exactly that many entries (completions arriving mid-drain wait for the next tick).
 
 ```go
@@ -79,7 +77,7 @@ The snapshot is deliberate and without it, a fast completion producer could make
 
 ## Capacity and cost
 
-Each job declares a `Cost` field. Each worker has a `Capacity`. Admission is gated on whether a worker has enough remaining capacity. The admit phase uses best-fit: the worker with the smallest available capacity that still fits the job, minimizing fragmentation.
+Each job declares a `Cost` and each worker has a `Capacity`, and admission is gated on whether a worker has enough remaining capacity. The admit phase uses best-fit: the worker with the smallest available capacity that still fits the job, minimizing fragmentation.
 
 ```go
 func (wp *WorkerPool) Admit(jobID string, cost int) (string, bool) {
@@ -96,7 +94,7 @@ func (wp *WorkerPool) Admit(jobID string, cost int) (string, bool) {
 }
 ```
 
-> **vLLM parallel:** vLLM's capacity unit is KV cache blocks. The number of KV blocks a request would need is computed from its current sequence length and the block size which typically is 16 tokens per block (a request cannot run without enough free blocks). The `Cost` I have defined in the tick-based scheduler is static, declared at submission but vLLM's cost is dynamic, growing as the request generates tokens. That is why preemption exists in vLLM and not in ours. Static cost is a simplification that collapses an entire class of hard problems.
+> **vLLM parallel:** vLLM's capacity unit is KV cache blocks. The number of KV blocks a request would need is computed from its current sequence length and the block size which typically is 16 tokens per block (a request cannot run without enough free blocks). The `Cost` I have defined in the tick-based scheduler is static, declared at submission but vLLM's cost is dynamic, growing as the request generates tokens. That is why preemption exists in vLLM and not in ours. Because our cost never changes, we never have to take capacity back from a running job, which is where most of the real difficulty in scheduling lives.
 
 ## Backpressure via rejection
 
@@ -109,7 +107,7 @@ if s.config.MaxPendingJobs > 0 && s.pending.Len() >= s.config.MaxPendingJobs {
 }
 ```
 
-> **vLLM parallel:** vLLM caps concurrent sequences with `max_num_seqs`. When the cap is hit, new requests are not rejected. They wait at the API server until capacity opens up. Our scheduler rejects at the boundary while vLLM queues at the boundary. For our scope, rejection is simpler and easier to reason about, but for an inference gateway serving many clients, queuing is the right call.
+> **vLLM parallel:** vLLM caps concurrent sequences with `max_num_seqs`. When the cap is hit, new requests are not rejected. They wait at the API server until capacity opens up. Rejection is simpler and easier to reason about, but for an inference gateway serving many clients, queuing is the right call.
 
 ## The completions channel
 
@@ -127,10 +125,10 @@ go func() {
 }()
 ```
 
-> **vLLM parallel:** The GPU worker sends outputs back to EngineCore over shared memory. EngineCore reads those outputs within the same step before the next scheduling decision and decides what to do. (isolated decision-maker with the workers producing signals).
+> **vLLM parallel:** The GPU worker sends outputs back to EngineCore over shared memory. EngineCore reads those outputs within the same step before the next scheduling decision and decides what to do, staying the sole decision-maker while workers only produce signals.
 
 ## Closing thoughts
 
-The best way to understand why a system is designed a certain way is to face the same constraints yourself. What vLLM builds on top of these foundations is where it gets genuinely interesting. The API server and EngineCore run as separate Python processes which is not by preference, but because the GIL makes true in-process parallelism impossible (coordination happens over ZMQ instead of a channel). The next post traces a request through that architecture end to end.
+Building even a stripped-down version is what made vLLM's design choices click for me. What vLLM builds on top of these foundations is where it gets interesting. The API server and EngineCore run as separate Python processes because the GIL rules out true in-process parallelism; coordination happens over ZMQ instead of a channel. The next post traces a request through that architecture end to end.
 
 The scheduler code is on GitHub at [adiu19/chorus](https://github.com/adiu19/chorus/tree/main/scheduler).
