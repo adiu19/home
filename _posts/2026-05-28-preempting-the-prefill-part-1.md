@@ -10,11 +10,9 @@ tags:
 giscus_comments: false
 published: true
 ---
-This series covers the time I've spent in vLLM's scheduler: building a paper into it, benchmarking, and seeing what stuck.
-
 Inference serving has a latency problem. Long prefills hold the GPU for hundreds of milliseconds, urgent requests queued behind them miss their TTFT SLO, and the scheduler's only preemption trigger is KV cache memory pressure, which says nothing about deadlines. Under contention, the system can be doing exactly what it was designed to do and still miss the metric users care about. In our case, that metric is TTFT (time to first token).
 
-[FlowPrefill](https://arxiv.org/pdf/2602.16603) is a proposal that claims to close this gap: preempt long prefills mid-forward-pass to rescue urgent waiters. I built a variant in vLLM on a P/D-disaggregated setup; this post sets the context, with the build and benchmarks in the next two.
+[FlowPrefill](https://arxiv.org/pdf/2602.16603) is a proposal that claims to close this gap: preempt long prefills mid-forward-pass to rescue urgent waiters. I built a variant in vLLM on a P/D-disaggregated setup, and I'll walk through it in three parts: this post sets the background and motivation, the next focuses on the design decisions and implementation, and the third gets into the benchmark numbers (the fun part).
 
 ## How vLLM serves a streaming request
 
